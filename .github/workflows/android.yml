@@ -1,0 +1,80 @@
+
+name: Build APK - Tablas Pro Offline - io.github.negociostj.twa
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install
+        run: npm install
+
+      - name: Add Android (package io.github.negociostj.twa)
+        run: |
+          npx cap add android || echo "exists"
+          cat capacitor.config.json
+
+      - name: Copy web
+        run: npx cap copy android
+
+      - name: Patch Manifest - Add native permissions (evita rechazo Uptodown wrapper)
+        run: |
+          FILE=android/app/src/main/AndroidManifest.xml
+          echo "--- ANTES ---"
+          cat $FILE
+          # Inserta permisos si no existen
+          if ! grep -q "WRITE_EXTERNAL_STORAGE" $FILE; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' $FILE || true
+          fi
+          # Asegura appId correcto
+          sed -i 's/com\.luiskah77\.tablaspro/io.github.negociostj.twa/g' $FILE || true
+          echo "--- DESPUES ---"
+          cat $FILE
+
+      - name: Build APK Debug
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --info
+          ls -lh app/build/outputs/apk/debug/
+
+      - name: Upload APK - Este es el que aparece en Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TablasPro-Offline-io.github.negociostj.twa-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 10
+
+      - name: Build AAB
+        if: always()
+        run: |
+          cd android
+          ./gradlew bundleDebug || true
+          ls -lh app/build/outputs/bundle/debug/ || true
+
+      - name: Upload AAB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TablasPro-Offline-AAB
+          path: android/app/build/outputs/bundle/debug/*.aab
+          if-no-files-found: warn
