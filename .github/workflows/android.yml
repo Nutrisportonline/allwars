@@ -1,4 +1,3 @@
-
 name: Build APK - Tablas Pro Offline - io.github.negociostj.twa
 
 on:
@@ -25,7 +24,7 @@ jobs:
       - name: Install
         run: npm install
 
-      - name: Add Android (package io.github.negociostj.twa)
+      - name: Add Android
         run: |
           npx cap add android || echo "exists"
           cat capacitor.config.json
@@ -33,48 +32,37 @@ jobs:
       - name: Copy web
         run: npx cap copy android
 
-      - name: Patch Manifest - Add native permissions (evita rechazo Uptodown wrapper)
+      - name: Patch Manifest - Add native permissions
         run: |
           FILE=android/app/src/main/AndroidManifest.xml
-          echo "--- ANTES ---"
+          echo "--- BEFORE ---"
           cat $FILE
-          # Inserta permisos si no existen
-          if ! grep -q "WRITE_EXTERNAL_STORAGE" $FILE; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' $FILE || true
-          fi
-          # Asegura appId correcto
-          sed -i 's/com\.luiskah77\.tablaspro/io.github.negociostj.twa/g' $FILE || true
-          echo "--- DESPUES ---"
+          python3 << 'PY'
+          import pathlib
+          p = pathlib.Path("android/app/src/main/AndroidManifest.xml")
+          txt = p.read_text()
+          if "WRITE_EXTERNAL_STORAGE" not in txt:
+              txt = txt.replace("<manifest", '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />', 1)
+              txt = txt.replace('xmlns:android="http://schemas.android.com/apk/res/android" xmlns:android=', 'xmlns:android=')
+              p.write_text(txt)
+          print("Patched")
+          PY
+          echo "--- AFTER ---"
           cat $FILE
 
-      - name: Build APK Debug
+      - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --info
-          ls -lh app/build/outputs/apk/debug/
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK - Este es el que aparece en Artifacts
+      - name: List APKs
+        run: find android/app/build/outputs -type f -name "*.apk" | xargs ls -lh
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: TablasPro-Offline-io.github.negociostj.twa-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 10
-
-      - name: Build AAB
-        if: always()
-        run: |
-          cd android
-          ./gradlew bundleDebug || true
-          ls -lh app/build/outputs/bundle/debug/ || true
-
-      - name: Upload AAB
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TablasPro-Offline-AAB
-          path: android/app/build/outputs/bundle/debug/*.aab
-          if-no-files-found: warn
