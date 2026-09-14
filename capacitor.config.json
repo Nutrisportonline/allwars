@@ -1,5 +1,11 @@
 {
-  "appId": "com.luiskah77.tablaspro",
-  "appName": "Tablas Pro",
-  "webDir": "www"
+  "appId": "io.github.negociostj.twa",
+  "appName": "Tablas Pro Offline",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1000
+    }
+  }
 }

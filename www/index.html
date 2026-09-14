@@ -141,7 +141,9 @@ window.abrirTorneo=function(id){
   let t=torneos.find(x=>x.id===id);
   if(!t) return;
   torneoActual=t; torneoActualId=id;
-  equipos=t.equipos||[]; partidos=t.partidos||[]; plantilla=t.plantilla||[];
+  equipos = (t.equipos||[]).map(eq=> (typeof eq==='string'? eq : eq.nombre||eq.name||'Equipo'));
+        // Guardar como strings para compatibilidad con backup, pero render soporta ambos
+         partidos=t.partidos||[]; plantilla=t.plantilla||[];
   document.getElementById('torneoNombreTitle').textContent=t.nombre;
   document.getElementById('view-lista').style.display='none';
   document.getElementById('view-torneo').style.display='block';
@@ -174,7 +176,7 @@ window.showTab=function(name){
 }
 
 function actualizarSelectsEquipos(){
-  let opts=equipos.map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
+  let opts=equipos.map(e=>{ let n=(typeof e==='string'?e:e.nombre); return `<option value="${n}">${n}</option>`; }).join('');
   document.getElementById('partLocal').innerHTML=opts;
   document.getElementById('partVisit').innerHTML=opts;
   document.getElementById('jugEquipo').innerHTML='<option value="">Equipo</option>'+opts;
@@ -247,8 +249,12 @@ function renderPlantilla(){
 
 function renderEquipos(){
   let cont=document.getElementById('listaEquipos');
-  if(!equipos.length){ cont.innerHTML='<div class="empty">Sin equipos</div>'; return; }
-  cont.innerHTML=equipos.map(e=>`<div style="background:#1c1c1c;padding:12px;border-radius:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid #232323"><b>${e.nombre}</b><button class="btn-small" style="background:#2a1515;color:#ff5555" onclick="borrarEquipo('${e.nombre}')">Borrar</button></div>`).join('');
+  if(!equipos || !equipos.length){ cont.innerHTML='<div class="empty">Sin equipos</div>'; return; }
+  // Normaliza: soporta string o objeto {nombre}
+  cont.innerHTML=equipos.map(e=>{
+    let nombre = (typeof e==='string') ? e : (e.nombre||e.name||'Equipo');
+    return `<div style="background:#1c1c1c;padding:12px;border-radius:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid #232323"><b>${nombre}</b><button class="btn-small" style="background:#2a1515;color:#ff5555" onclick="borrarEquipo('${nombre}')">Borrar</button></div>`;
+  }).join('');
 }
 
 function renderGolesDetalle(){
@@ -326,7 +332,7 @@ window.borrarPartido=function(idx){ if(!confirm('Borrar partido?')) return; part
 
 function calc(){
   let tabla={};
-  equipos.forEach(e=>{ tabla[e.nombre]={nombre:e.nombre, pj:0, gf:0, gc:0, dif:0, pts:0}; });
+  equipos.forEach(e=>{ let n=(typeof e==='string'?e:e.nombre); tabla[n]={nombre:n, pj:0, gf:0, gc:0, dif:0, pts:0}; });
   partidos.forEach(p=>{
     if(!tabla[p.local]) tabla[p.local]={nombre:p.local, pj:0, gf:0, gc:0, dif:0, pts:0};
     if(!tabla[p.visit]) tabla[p.visit]={nombre:p.visit, pj:0, gf:0, gc:0, dif:0, pts:0};
@@ -430,6 +436,12 @@ window.importarBackup=function(event){
         }
       });
       let validos = data.filter(t=> t.nombre || t.equipos);
+      // Normalizar equipos a strings para evitar undefined
+      validos.forEach(v=>{
+        if(v.equipos && Array.isArray(v.equipos)){
+          v.equipos = v.equipos.map(eq=> typeof eq==='string' ? eq : (eq.nombre||eq.name||'')).filter(Boolean);
+        }
+      });
       if(validos.length===0) throw new Error('Sin torneos validos');
 
       // Verificar duplicados por nombre
@@ -473,7 +485,7 @@ window.exportarBackup=function(){
     return {
       id: t.id,
       nombre: t.nombre,
-      equipos: t.equipos||[],
+      equipos: (t.equipos||[]).map(eq=> typeof eq==='string' ? eq : (eq.nombre||'')).filter(Boolean),
       partidos: (t.partidos||[]).map(p=>({
         fecha: p.fecha,
         local: p.local,
